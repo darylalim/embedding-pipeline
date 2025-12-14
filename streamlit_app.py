@@ -7,7 +7,7 @@ import streamlit as st
 from pathlib import Path
 from docling.utils.model_downloader import download_models
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 # Docling models can be prefetched for offline use
@@ -50,6 +50,14 @@ use_structure_prediction = st.checkbox(
     help="Use text cells predicted from the table structure model instead of mapping back to PDF cells. This can improve output quality if multiple columns in tables are erroneously merged."
 )
 
+# TableFormer mode selector
+tableformer_mode = st.selectbox(
+    "TableFormer mode",
+    options=["Accurate", "Fast"],
+    index=0, # Default to "Accurate"
+    help="Accurate mode provides better quality with difficult table structures. Fast mode is faster but less accurate."
+)
+
 if st.button("Generate embedding", type="primary"):
     # Create pipeline options based on user selection
     pipeline_options = PdfPipelineOptions(
@@ -60,6 +68,12 @@ if st.button("Generate embedding", type="primary"):
     # Set cell matching based on checkbox
     if use_structure_prediction:
         pipeline_options.table_structure_options.do_cell_matching = False
+
+    # Set TableFormer mode based on selectbox
+    if tableformer_mode == "Accurate":
+        pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+    else: # "Fast"
+        pipeline_options.table_structure_options.mode = TableFormerMode.FAST
 
     # Create converter with current options
     doc_converter = DocumentConverter(
