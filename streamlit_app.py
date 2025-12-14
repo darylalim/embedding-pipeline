@@ -15,17 +15,6 @@ docling.utils.model_downloader.download_models()
 
 artifacts_path = str(Path.home() / '.cache' / 'docling' / 'models')
 
-# pipeline_options = PdfPipelineOptions(
-#     artifacts_path=artifacts_path,
-#     do_table_structure=True
-# )
-
-# doc_converter = DocumentConverter(
-#     format_options={
-#         InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-#     }
-# )
-
 embedding_model = 'embeddinggemma'
 
 # Function to convert source file to a Docling document AND export to markdown
