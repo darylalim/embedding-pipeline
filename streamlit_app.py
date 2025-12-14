@@ -72,6 +72,12 @@ formula_understanding = st.checkbox(
     help="Analyzes equation formulas in documents and extracts their LaTeX representation."
 )
 
+picture_classification = st.checkbox(
+    "Picture classification",
+    value=False,
+    help="Classifies pictures in the document (charts, diagrams, logos, signatures) using the DocumentFigureClassifier model."
+)
+
 if st.button("Generate embedding", type="primary"):
     # Create pipeline options based on user selection
     pipeline_options = PdfPipelineOptions(
@@ -96,6 +102,12 @@ if st.button("Generate embedding", type="primary"):
     # Set formula understanding enrichment based on checkbox
     if formula_understanding:
         pipeline_options.do_formula_enrichment = True
+
+    # Set picture classification enrichment based on checkbox
+    if picture_classification:
+        pipeline_options.generate_picture_images = True
+        pipeline_options.images_scale = 2
+        pipeline_options.do_picture_classification = True
 
     # Create converter with current options
     doc_converter = DocumentConverter(
