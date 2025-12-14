@@ -1,4 +1,6 @@
 # Import packages
+import tempfile
+import os
 import docling
 import ollama
 import streamlit as st
@@ -53,10 +55,7 @@ if st.button("Generate embedding", type="primary"):
         try:
             # Show progress
             with st.spinner("Converting PDF to markdown..."):
-                # Save uploaded file temporarily for Docling to process
-                import tempfile
-                import os
-                
+                # Save uploaded file temporarily for Docling to process                
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
                     tmp_file.write(uploaded_file.read())
                     tmp_file_path = tmp_file.name
