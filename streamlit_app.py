@@ -11,11 +11,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 # Docling models can be prefetched for offline use
 docling.utils.model_downloader.download_models()
 
-# artifacts_path = '/Users/daryl-lim/.cache/docling/models'
 artifacts_path = str(Path.home() / '.cache' / 'docling' / 'models')
-
-# File path or URL
-# source = "https://arxiv.org/pdf/2408.09869"
 
 pipeline_options = PdfPipelineOptions(artifacts_path=artifacts_path)
 
