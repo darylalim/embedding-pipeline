@@ -66,6 +66,12 @@ code_understanding = st.checkbox(
     help="Uses advanced parsing for code blocks found in the document."
 )
 
+formula_understanding = st.checkbox(
+    "Formula understanding",
+    value=False,
+    help="Analyzes equation formulas in documents and extracts their LaTeX representation."
+)
+
 if st.button("Generate embedding", type="primary"):
     # Create pipeline options based on user selection
     pipeline_options = PdfPipelineOptions(
@@ -86,6 +92,10 @@ if st.button("Generate embedding", type="primary"):
     # Set code understanding enrichment based on checkbox
     if code_understanding:
         pipeline_options.do_code_enrichment = True
+
+    # Set formula understanding enrichment based on checkbox
+    if formula_understanding:
+        pipeline_options.do_formula_enrichment = True
 
     # Create converter with current options
     doc_converter = DocumentConverter(
