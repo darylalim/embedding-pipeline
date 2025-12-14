@@ -6,6 +6,7 @@ import ollama
 import streamlit as st
 from pathlib import Path
 from docling.utils.model_downloader import download_models
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -78,6 +79,15 @@ picture_classification = st.checkbox(
     help="Classifies pictures in the document (charts, diagrams, logos, signatures) using the DocumentFigureClassifier model."
 )
 
+# Accelerator options
+st.subheader("Accelerator options")
+accelerator_mode = st.selectbox(
+    "Accelerator mode",
+    options=["AUTO", "CPU", "MPS", "CUDA"],
+    index=0, # Default to "AUTO"
+    help="Runs conversion with a specific accelerator configuration. CPU mode works everywhere. MPS is macOS only. CUDA requires a compatible GPU and CUDA enabled PyTorch build."
+)
+
 if st.button("Generate embedding", type="primary"):
     # Create pipeline options based on user selection
     pipeline_options = PdfPipelineOptions(
@@ -108,6 +118,32 @@ if st.button("Generate embedding", type="primary"):
         pipeline_options.generate_picture_images = True
         pipeline_options.images_scale = 2
         pipeline_options.do_picture_classification = True
+
+    # Set accelerator mode based on selectbox
+    if accelerator_mode == "AUTO":
+        accelerator_options = AcceleratorOptions(
+            num_threads=8,
+            device=AcceleratorDevice.AUTO
+        )
+        pipeline_options.accelerator_options = accelerator_options
+    elif accelerator_mode == "CPU":
+        accelerator_options = AcceleratorOptions(
+            num_threads=8,
+            device=AcceleratorDevice.CPU
+        )
+        pipeline_options.accelerator_options = accelerator_options
+    elif accelerator_mode == "MPS":
+        accelerator_options = AcceleratorOptions(
+            num_threads=8,
+            device=AcceleratorDevice.MPS
+        )
+        pipeline_options.accelerator_options = accelerator_options
+    else: # CUDA
+        accelerator_options = AcceleratorOptions(
+            num_threads=8,
+            device=AcceleratorDevice.CUDA
+        )
+        pipeline_options.accelerator_options = accelerator_options
 
     # Create converter with current options
     doc_converter = DocumentConverter(
