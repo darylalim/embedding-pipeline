@@ -15,13 +15,16 @@ docling.utils.model_downloader.download_models()
 
 artifacts_path = str(Path.home() / '.cache' / 'docling' / 'models')
 
-pipeline_options = PdfPipelineOptions(artifacts_path=artifacts_path)
+# pipeline_options = PdfPipelineOptions(
+#     artifacts_path=artifacts_path,
+#     do_table_structure=True
+# )
 
-doc_converter = DocumentConverter(
-    format_options={
-        InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-    }
-)
+# doc_converter = DocumentConverter(
+#     format_options={
+#         InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+#     }
+# )
 
 embedding_model = 'embeddinggemma'
 
@@ -50,7 +53,32 @@ st.write("Generate embeddings using an Ollama model.")
 # File uploader for PDF file
 uploaded_file = st.file_uploader("Choose a file", type=["pdf"])
 
+# PDF table extraction options
+st.subheader("PDF table extraction options")
+use_structure_prediction = st.checkbox(
+    "Use text cells from structure prediction",
+    value=False,
+    help="Use text cells predicted from the table structure model instead of mapping back to PDF cells. This can improve output quality if multiple columns in tables are erroneously merged."
+)
+
 if st.button("Generate embedding", type="primary"):
+    # Create pipeline options based on user selection
+    pipeline_options = PdfPipelineOptions(
+        artifacts_path=artifacts_path,
+        do_table_structure=True
+    )
+
+    # Set cell matching based on checkbox
+    if use_structure_prediction:
+        pipeline_options.table_structure_options.do_cell_matching = False
+
+    # Create converter with current options
+    doc_converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
+
     if uploaded_file is not None:
         try:
             # Show progress
