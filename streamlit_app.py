@@ -47,7 +47,7 @@ st.subheader("PDF table extraction options")
 use_structure_prediction = st.checkbox(
     "Use text cells from structure prediction",
     value=False,
-    help="Use text cells predicted from the table structure model instead of mapping back to PDF cells. This can improve output quality if multiple columns in tables are erroneously merged."
+    help="Uses text cells predicted from the table structure model instead of mapping back to PDF cells. This can improve output quality if multiple columns in tables are erroneously merged."
 )
 
 # TableFormer mode selector
@@ -56,6 +56,14 @@ tableformer_mode = st.selectbox(
     options=["Accurate", "Fast"],
     index=0, # Default to "Accurate"
     help="Accurate mode provides better quality with difficult table structures. Fast mode is faster but less accurate."
+)
+
+# Enrichment features
+st.subheader("Enrichment features")
+code_understanding = st.checkbox(
+    "Code understanding",
+    value=False,
+    help="Uses advanced parsing for code blocks found in the document."
 )
 
 if st.button("Generate embedding", type="primary"):
@@ -74,6 +82,10 @@ if st.button("Generate embedding", type="primary"):
         pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
     else: # "Fast"
         pipeline_options.table_structure_options.mode = TableFormerMode.FAST
+
+    # Set code understanding enrichment based on checkbox
+    if code_understanding:
+        pipeline_options.do_code_enrichment = True
 
     # Create converter with current options
     doc_converter = DocumentConverter(
