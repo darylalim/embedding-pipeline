@@ -7,8 +7,8 @@ Embedding pipeline for documents.
 
 Run the following commands in the terminal.
 
-- Download an Ollama model: `ollama pull gemma3`
+- Download an Ollama embedding model: `ollama pull embeddinggemma`
 - Set up a Python virtual environment: `python3 -m venv embedding_pipeline_env`
-- Activate the virtual environment: `source embedding_pipeline_env/source/activate` (Mac)
+- Activate the virtual environment: `source embedding_pipeline_env/bin/activate` (Mac)
 - Install the required Python packages: `pip install -r requirements.txt`
 - Run the application in a web browser: `streamlit run streamlit_app.py`
