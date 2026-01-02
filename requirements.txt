@@ -1,3 +1,4 @@
 docling
-ollama
 streamlit
+transformers
+torch
