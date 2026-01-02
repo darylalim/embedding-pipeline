@@ -1,3 +1,6 @@
+.DS_Store
 .ipynb_checkpoints
 *.ipynb
-embedding_pipeline_env
+streamlit_env
+streamlit_appV1.py
+granite_embedding_transformers.py
