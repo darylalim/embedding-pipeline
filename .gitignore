@@ -2,5 +2,5 @@
 .ipynb_checkpoints
 *.ipynb
 streamlit_env
-streamlit_appV1.py
+streamlit_app_v1.py
 granite_embedding_transformers.py
