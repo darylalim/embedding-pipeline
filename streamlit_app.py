@@ -48,7 +48,6 @@ def load_embedding_models(device):
     for display_name, model_path in MODEL_OPTIONS.items():
         model = AutoModel.from_pretrained(model_path, device_map=device)
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-        # model.to(device)
         models[display_name] = {
             "model": model,
             "tokenizer": tokenizer
@@ -69,12 +68,10 @@ def convert(source, doc_converter):
 def embed(doc_markdown, model, tokenizer, device):
     """Generate a vector embedding from input text using a transformers model."""
     tokenized_input = tokenizer([doc_markdown], padding=True, truncation=True, return_tensors='pt')
-    
     tokenized_input = {k: v.to(device) for k, v in tokenized_input.items()}
     
     with torch.no_grad():
         model_output = model(**tokenized_input)
-        # Use CLS pooling
         embedding = model_output[0][:, 0]
     
     embedding = torch.nn.functional.normalize(embedding, dim=1)
@@ -189,9 +186,7 @@ if st.button("Embed", type="primary"):
             
             with st.spinner("Generating embedding..."):
                 start_time = time.time_ns()
-                
                 embedding_vector = embed(doc_markdown, model, tokenizer, device)
-                
                 end_time = time.time_ns()
                 total_duration_ns = end_time - start_time
             
