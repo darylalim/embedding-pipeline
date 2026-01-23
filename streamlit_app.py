@@ -10,216 +10,200 @@ from docling.datamodel.accelerator_options import AcceleratorDevice, Accelerator
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.utils.model_downloader import download_models
 from transformers import AutoModel, AutoTokenizer
 
-# Docling models can be prefetched for offline use
-download_models()
-
-artifacts_path = str(Path.home() / '.cache' / 'docling' / 'models')
+ARTIFACTS_PATH = str(Path.home() / ".cache" / "docling" / "models")
 
 MODEL_OPTIONS = {
     "Granite Embedding Small English R2": "ibm-granite/granite-embedding-small-english-r2",
-    "Granite Embedding English R2": "ibm-granite/granite-embedding-english-r2"
+    "Granite Embedding English R2": "ibm-granite/granite-embedding-english-r2",
 }
 
+DEVICE_MAP = {
+    "mps": AcceleratorDevice.MPS,
+    "cuda": AcceleratorDevice.CUDA,
+    "cpu": AcceleratorDevice.CPU,
+}
+
+
 def get_device():
-    """Automatically detect the best available device in order of priority: MPS, CUDA, CPU."""
+    """Detect best available device: MPS > CUDA > CPU."""
     if torch.backends.mps.is_available():
         return "mps"
-    elif torch.cuda.is_available():
+    if torch.cuda.is_available():
         return "cuda"
-    else:
-        return "cpu"
+    return "cpu"
 
-def get_accelerator_device(device):
-    """Map the torch device to docling AcceleratorDevice."""
-    if device == "mps":
-        return AcceleratorDevice.MPS
-    elif device == "cuda":
-        return AcceleratorDevice.CUDA
-    else:
-        return AcceleratorDevice.CPU
 
 @st.cache_resource
-def load_embedding_models(device):
-    """Cache embedding models at application startup."""
-    models = {}
-    for display_name, model_path in MODEL_OPTIONS.items():
-        model = AutoModel.from_pretrained(model_path, device_map=device)
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        models[display_name] = {
-            "model": model,
-            "tokenizer": tokenizer
-        }
-    return models
+def load_model(model_path: str, device: str):
+    """Load a single embedding model on demand."""
+    return {
+        "model": AutoModel.from_pretrained(model_path, device_map=device),
+        "tokenizer": AutoTokenizer.from_pretrained(model_path),
+    }
 
-def convert(source, doc_converter):
-    """Convert a source file to a Docling document and export to Markdown."""
-    result = doc_converter.convert(
-        source=source,
-        max_num_pages=100,
-        max_file_size=20971520
-    )
-    doc = result.document
-    doc_markdown = doc.export_to_markdown()
-    return doc_markdown
 
-def embed(doc_markdown, model, tokenizer, device):
-    """Generate a vector embedding from input text using a transformers model."""
-    tokenized_input = tokenizer([doc_markdown], padding=True, truncation=True, return_tensors='pt')
-    tokenized_input = {k: v.to(device) for k, v in tokenized_input.items()}
-    
+def convert(source: str, doc_converter: DocumentConverter) -> str:
+    """Convert PDF to markdown."""
+    result = doc_converter.convert(source=source, max_num_pages=100, max_file_size=20971520)
+    return result.document.export_to_markdown()
+
+
+def embed(text: str, model, tokenizer, device: str) -> list[float]:
+    """Generate normalized embedding vector from text."""
+    tokens = tokenizer([text], padding=True, truncation=True, return_tensors="pt")
+    tokens = {k: v.to(device) for k, v in tokens.items()}
+
     with torch.no_grad():
-        model_output = model(**tokenized_input)
-        embedding = model_output[0][:, 0]
-    
-    embedding = torch.nn.functional.normalize(embedding, dim=1)
-    
-    return embedding.cpu().numpy().tolist()[0]
+        output = model(**tokens)
+        embedding = output[0][:, 0]
 
+    return torch.nn.functional.normalize(embedding, dim=1).cpu().numpy().tolist()[0]
+
+
+def build_pipeline_options(
+    tableformer_mode: str,
+    use_structure_prediction: bool,
+    code_understanding: bool,
+    formula_understanding: bool,
+    picture_classification: bool,
+    accelerator_device: AcceleratorDevice,
+) -> PdfPipelineOptions:
+    """Build PDF pipeline options from UI settings."""
+    options = PdfPipelineOptions(artifacts_path=ARTIFACTS_PATH, do_table_structure=True)
+
+    options.table_structure_options.mode = (
+        TableFormerMode.ACCURATE if tableformer_mode == "Accurate" else TableFormerMode.FAST
+    )
+    options.table_structure_options.do_cell_matching = not use_structure_prediction
+    options.do_code_enrichment = code_understanding
+    options.do_formula_enrichment = formula_understanding
+
+    if picture_classification:
+        options.generate_picture_images = True
+        options.images_scale = 2
+        options.do_picture_classification = True
+
+    options.accelerator_options = AcceleratorOptions(num_threads=8, device=accelerator_device)
+    return options
+
+
+# Initialize session state
+if "embedding_result" not in st.session_state:
+    st.session_state.embedding_result = None
+
+# UI
 st.title("Embedding Pipeline")
 st.write("Generate vector embeddings from text with IBM Granite Embedding R2 models.")
 
 uploaded_file = st.file_uploader("Upload file", type=["pdf"])
 
 device = get_device()
-accelerator_device = get_accelerator_device(device)
-
-with st.spinner(f"Loading models on {device.upper()}..."):
-    embedding_models = load_embedding_models(device)
+accelerator_device = DEVICE_MAP[device]
 
 st.subheader("Embedding Models")
 selected_model_name = st.radio(
     "Select model",
     options=list(MODEL_OPTIONS.keys()),
     index=0,
-    help="Select a model for generating vector embeddings from text."
+    help="Select a model for generating vector embeddings from text.",
 )
-selected_model_path = MODEL_OPTIONS[selected_model_name]
 
 st.subheader("PDF Table Extraction")
 use_structure_prediction = st.toggle(
     "Use text cells from structure prediction",
     value=False,
-    help="Uses text cells predicted from the table structure model instead of mapping back to PDF cells. This can improve output quality if multiple columns in tables are erroneously merged."
+    help="Uses text cells predicted from the table structure model instead of mapping back to PDF cells.",
 )
 
 tableformer_mode = st.radio(
     "TableFormer Mode",
     options=["Accurate", "Fast"],
     index=0,
-    help="Accurate mode provides better quality with difficult table structures. Fast mode is faster but less accurate."
+    help="Accurate mode provides better quality. Fast mode is faster but less accurate.",
 )
 
 st.subheader("Enrichment")
-code_understanding = st.toggle(
-    "Code understanding",
-    value=False,
-    help="Uses advanced parsing for code blocks found in the document."
-)
-
-formula_understanding = st.toggle(
-    "Formula understanding",
-    value=False,
-    help="Analyzes equation formulas in documents and extracts their LaTeX representation."
-)
-
-picture_classification = st.toggle(
-    "Picture classification",
-    value=False,
-    help="Classifies pictures in the document (charts, diagrams, logos, signatures) using the DocumentFigureClassifier model."
-)
+code_understanding = st.toggle("Code understanding", value=False, help="Advanced parsing for code blocks.")
+formula_understanding = st.toggle("Formula understanding", value=False, help="Extracts LaTeX from equations.")
+picture_classification = st.toggle("Picture classification", value=False, help="Classifies pictures in the document.")
 
 if st.button("Embed", type="primary"):
-    pipeline_options = PdfPipelineOptions(
-        artifacts_path=artifacts_path,
-        do_table_structure=True
-    )
-    
-    if use_structure_prediction:
-        pipeline_options.table_structure_options.do_cell_matching = False
-    
-    if tableformer_mode == "Accurate":
-        pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+    if uploaded_file is None:
+        st.warning("Upload a PDF file.")
     else:
-        pipeline_options.table_structure_options.mode = TableFormerMode.FAST
-    
-    if code_understanding:
-        pipeline_options.do_code_enrichment = True
-    
-    if formula_understanding:
-        pipeline_options.do_formula_enrichment = True
-    
-    if picture_classification:
-        pipeline_options.generate_picture_images = True
-        pipeline_options.images_scale = 2
-        pipeline_options.do_picture_classification = True
-    
-    accelerator_options = AcceleratorOptions(
-        num_threads=8,
-        device=accelerator_device
-    )
-    pipeline_options.accelerator_options = accelerator_options
-    
-    doc_converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-        }
-    )
-
-    if uploaded_file is not None:
+        tmp_file_path = None
         try:
-            model = embedding_models[selected_model_name]["model"]
-            tokenizer = embedding_models[selected_model_name]["tokenizer"]
-            
+            # Load only the selected model
+            with st.spinner(f"Loading model on {device.upper()}..."):
+                model_data = load_model(MODEL_OPTIONS[selected_model_name], device)
+
+            # Build converter with pipeline options
+            pipeline_options = build_pipeline_options(
+                tableformer_mode,
+                use_structure_prediction,
+                code_understanding,
+                formula_understanding,
+                picture_classification,
+                accelerator_device,
+            )
+            doc_converter = DocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+            )
+
+            # Convert PDF to markdown
             with st.spinner("Converting document..."):
-                # Save uploaded file temporarily for Docling to process                
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
                     tmp_file.write(uploaded_file.read())
                     tmp_file_path = tmp_file.name
-                
                 doc_markdown = convert(tmp_file_path, doc_converter)
-                
-                # Clean up temporary file
-                os.unlink(tmp_file_path)
-            
+
+            # Generate embedding
             with st.spinner("Generating embedding..."):
-                start_time = time.time_ns()
-                embedding_vector = embed(doc_markdown, model, tokenizer, device)
-                end_time = time.time_ns()
-                total_duration_ns = end_time - start_time
-            
-            st.success("Done.")
-            
-            st.subheader("Metrics")
-            
-            st.metric("Model", selected_model_name)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Embedding Size", len(embedding_vector))
-            with col2:
-                st.metric("Total Duration (nanoseconds)", total_duration_ns)
-            
-            # Prepare JSON for download
-            embedding_data = {
-                "model": selected_model_path,
+                start = time.perf_counter()
+                embedding_vector = embed(
+                    doc_markdown, model_data["model"], model_data["tokenizer"], device
+                )
+                duration_ms = (time.perf_counter() - start) * 1000
+
+            # Store results in session state
+            st.session_state.embedding_result = {
+                "model_name": selected_model_name,
+                "model_path": MODEL_OPTIONS[selected_model_name],
                 "embedding_size": len(embedding_vector),
-                "total_duration_ns": total_duration_ns,
-                "embedding": embedding_vector
+                "duration_ms": round(duration_ms, 2),
+                "embedding": embedding_vector,
+                "filename": uploaded_file.name,
             }
-            
-            json_str = json.dumps(embedding_data, indent=2)
-            
-            st.download_button(
-                label="Download JSON",
-                data=json_str,
-                file_name=f"{uploaded_file.name}_embedding.json",
-                mime="application/json"
-            )
-            
+
         except Exception as e:
-            st.error(f"Syntax error: {str(e)}")
-    else:
-        st.warning("Upload a PDF file.")
+            st.error(f"Error: {e}")
+
+        finally:
+            if tmp_file_path and os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+
+# Display results from session state
+if st.session_state.embedding_result:
+    result = st.session_state.embedding_result
+    st.success("Done.")
+
+    st.subheader("Metrics")
+    st.metric("Model", result["model_name"])
+    col1, col2 = st.columns(2)
+    col1.metric("Embedding Size", result["embedding_size"])
+    col2.metric("Duration (ms)", f"{result['duration_ms']:.2f}")
+
+    embedding_data = {
+        "model": result["model_path"],
+        "embedding_size": result["embedding_size"],
+        "duration_ms": result["duration_ms"],
+        "embedding": result["embedding"],
+    }
+    st.download_button(
+        label="Download JSON",
+        data=json.dumps(embedding_data, indent=2),
+        file_name=f"{result['filename']}_embedding.json",
+        mime="application/json",
+    )
